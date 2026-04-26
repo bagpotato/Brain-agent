@@ -12,14 +12,14 @@ Designed to work as an **automated second brain**: give it a topic and it genera
 $ brain
 
 Brain Agent — Interactive mode
-   Vault: /home/bag/Vault
+   Vault: /home/user/Vault
    Model: qwen2.5:7b
 
 Topic: nmap and network reconnaissance
 
 Thinking... done.
 
-Note saved at: /home/bag/Vault/Areas/Nmap - Network Scanning.md
+Note saved at: /home/user/Vault/Areas/Nmap - Network Scanning.md
 ```
 
 ---
