@@ -73,20 +73,6 @@ python3 brain_agent.py --vault ~/Vault --model qwen2.5:3b "CIDR subnetting"
 
 ## Permanent alias
 
-### NixOS
-
-Add to `/etc/nixos/configuration.nix`:
-
-```nix
-programs.zsh.shellAliases = {
-  brain = "python3 /path/brain_agent.py --vault /path/vault --interactive";
-};
-```
-
-```bash
-sudo nixos-rebuild switch
-```
-
 ### Standard Linux (bash/zsh)
 
 ```bash

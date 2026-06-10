@@ -1,12 +1,10 @@
- #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
-brain_agent.py — Agente local para añadir notas al vault de Obsidian
-Usa Ollama como backend de IA local.
+brain_agent.py — Local agent for adding notes to an Obsidian vault.
+Uses Ollama as a local AI backend.
 
-Uso:
-  python brain_agent.py "aprende sobre nmap"
-  python brain_agent.py "nuevo proyecto: monitoring con Grafana"
-  python brain_agent.py "recurso: libro The Web Application Hacker's Handbook"
+Usage:
+  python brain_agent.py "topic or note prompt"
   python brain_agent.py --interactive
 """
 
@@ -19,94 +17,75 @@ import sys
 import urllib.request
 import urllib.error
 
-# ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
+# ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-VAULT_PATH = os.path.expanduser("~/brain")   # ← cambia esto a la ruta de tu vault
+VAULT_PATH = os.path.expanduser("~/Vault")   # <- change this to your vault path
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL      = "qwen2.5:7b"                    # modelo recomendado
+MODEL      = "qwen2.5:7b"                    # recommended model
 
-CARPETAS = {
+FOLDERS = {
     "areas":     "Areas",
-    "proyecto":  "Proyectos",
-    "recurso":   "Recursos",
-    "objetivo":  "Objetivos",
-    "nota":      "Notas",          # carpeta genérica
+    "project":   "Projects",
+    "resource":  "Resources",
+    "goal":      "Goals",
+    "note":      "Notes",          # generic folder
 }
 
 # ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """
-Eres un agente de gestión de conocimiento para un vault de Obsidian.
-Tu trabajo es generar notas Markdown perfectamente formateadas para que el usuario
-las guarde en su segundo cerebro.
+You are a knowledge management agent for an Obsidian vault.
+Your job is to generate perfectly formatted Markdown notes for the user
+to save in their second brain.
 
-REGLAS OBLIGATORIAS:
-1. Responde SOLO con el contenido Markdown de la nota. Sin explicaciones, sin bloques
-   de código extra, sin texto antes o después.
-2. Siempre incluye un bloque YAML frontmatter al inicio con: tags, fecha, tipo.
-3. Usa [[enlaces internos]] para conectar con otras notas del vault cuando sea relevante.
-4. La primera línea después del frontmatter es siempre un heading H1 con emoji.
-5. Las notas deben ser concretas, útiles y accionables, no genéricas.
-6. Incluye secciones relevantes según el tipo de nota (ver abajo).
-7. Adapta el contenido al perfil del usuario: estudiante de SMX en Barcelona,
-   interesado en Linux, administración de sistemas, redes y ciberseguridad.
-   Su objetivo es trabajar en ciberseguridad.
+MANDATORY RULES:
+1. Respond ONLY with the Markdown content of the note. No explanations, no extra
+   code blocks, no text before or after.
+2. Always include a YAML frontmatter block at the beginning with: tags, date, type.
+3. Use [[internal links]] to connect to other vault notes when relevant.
+4. The first line after the frontmatter is always an H1 heading with an emoji.
+5. Notes must be concrete, useful, and actionable — not generic.
+6. Include relevant sections depending on the note type (see below).
 
-TIPOS DE NOTA Y SUS SECCIONES:
+NOTE TYPES AND THEIR SECTIONS:
 
-tipo: concepto
-  - Qué es / Definición
-  - Por qué importa (en contexto de ciberseguridad/sysadmin)
-  - Cómo funciona (técnico)
-  - Comandos / ejemplos prácticos (si aplica)
-  - Links relacionados [[...]]
+type: concept
+  - What it is / Definition
+  - Why it matters
+  - How it works (technical)
+  - Commands / practical examples (if applicable)
+  - Related links [[...]]
 
-tipo: proyecto
-  - Descripción
-  - Objetivo
-  - Stack / Tecnologías
+type: project
+  - Description
+  - Goal
+  - Stack / Technologies
   - To-do (checkboxes)
-  - Links relacionados [[...]]
+  - Related links [[...]]
 
-tipo: recurso
-  - Qué es
-  - Por qué vale la pena
-  - URL / referencia
-  - Nivel (básico / medio / avanzado)
-  - Links relacionados [[...]]
+type: resource
+  - What it is
+  - Why it is worth it
+  - URL / reference
+  - Level (beginner / intermediate / advanced)
+  - Related links [[...]]
 
-tipo: objetivo
-  - El objetivo
-  - Por qué
-  - Pasos concretos (checkboxes)
-  - Deadline o tiempo estimado
-  - Links relacionados [[...]]
+type: goal
+  - The goal
+  - Why
+  - Concrete steps (checkboxes)
+  - Deadline or estimated time
+  - Related links [[...]]
 
-tipo: nota
-  - Contenido libre pero estructurado
-  - Links relacionados [[...]]
-
-NOTAS EXISTENTES EN EL VAULT (usa [[]] para enlazarlas cuando tenga sentido):
-- [[🏠 Home]]
-- [[Linux & SO]]
-- [[Administración de Sistemas]]
-- [[Redes]]
-- [[Ciberseguridad]]
-- [[SMX]]
-- [[IA-local]]
-- [[Notion-Gmail]]
-- [[Web Personal]]
-- [[API QRLocator]]
-- [[🎯 Ciberseguridad]]
-- [[Recursos Linux]]
-- [[Recursos Ciberseguridad]]
-- [[Recursos Redes]]
+type: note
+  - Free but structured content
+  - Related links [[...]]
 """
 
-# ─── FUNCIONES ────────────────────────────────────────────────────────────────
+# ─── FUNCTIONS ────────────────────────────────────────────────────────────────
 
-def llamar_ollama(prompt: str) -> str:
-    """Llama a la API de Ollama y devuelve el texto generado."""
+def call_ollama(prompt: str) -> str:
+    """Calls the Ollama API and returns the generated text."""
     payload = json.dumps({
         "model": MODEL,
         "prompt": prompt,
@@ -130,107 +109,107 @@ def llamar_ollama(prompt: str) -> str:
             data = json.loads(resp.read().decode("utf-8"))
             return data.get("response", "").strip()
     except urllib.error.URLError as e:
-        print(f"\n❌ Error conectando con Ollama: {e}")
-        print("   Asegúrate de que Ollama está corriendo: ollama serve")
+        print(f"\n❌ Error connecting to Ollama: {e}")
+        print("   Make sure Ollama is running: ollama serve")
         sys.exit(1)
 
 
-def detectar_carpeta(contenido: str) -> str:
-    """Detecta la carpeta destino según el frontmatter o el contenido."""
-    match = re.search(r"tipo:\s*(\w+)", contenido.lower())
+def detect_folder(content: str) -> str:
+    """Detects the target folder based on the frontmatter or content."""
+    match = re.search(r"type:\s*(\w+)", content.lower())
     if match:
-        tipo = match.group(1)
-        return CARPETAS.get(tipo, "Notas")
-    return "Notas"
+        note_type = match.group(1)
+        return FOLDERS.get(note_type, "Notes")
+    return "Notes"
 
 
-def extraer_titulo(contenido: str) -> str:
-    """Extrae el título del H1 de la nota."""
-    match = re.search(r"^#\s+(.+)$", contenido, re.MULTILINE)
+def extract_title(content: str) -> str:
+    """Extracts the title from the note's H1 heading."""
+    match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
     if match:
-        titulo = match.group(1).strip()
-        # Limpia caracteres no válidos para nombres de archivo
-        titulo = re.sub(r'[<>:"/\\|?*]', '', titulo)
-        titulo = titulo.strip()
-        return titulo
-    return f"nota_{datetime.date.today()}"
+        title = match.group(1).strip()
+        # Strip characters that are invalid in file names
+        title = re.sub(r'[<>:"/\\|?*]', '', title)
+        title = title.strip()
+        return title
+    return f"note_{datetime.date.today()}"
 
 
-def guardar_nota(contenido: str, forzar_carpeta: str = None) -> str:
-    """Guarda la nota en el vault y devuelve la ruta."""
-    carpeta = forzar_carpeta or detectar_carpeta(contenido)
-    titulo  = extraer_titulo(contenido)
+def save_note(content: str, force_folder: str = None) -> str:
+    """Saves the note to the vault and returns the path."""
+    folder = force_folder or detect_folder(content)
+    title  = extract_title(content)
 
-    directorio = os.path.join(VAULT_PATH, carpeta)
-    os.makedirs(directorio, exist_ok=True)
+    directory = os.path.join(VAULT_PATH, folder)
+    os.makedirs(directory, exist_ok=True)
 
-    nombre_archivo = f"{titulo}.md"
-    ruta = os.path.join(directorio, nombre_archivo)
+    filename = f"{title}.md"
+    path = os.path.join(directory, filename)
 
-    # Evita sobreescribir
-    if os.path.exists(ruta):
+    # Avoid overwriting
+    if os.path.exists(path):
         timestamp = datetime.datetime.now().strftime("%H%M%S")
-        nombre_archivo = f"{titulo}_{timestamp}.md"
-        ruta = os.path.join(directorio, nombre_archivo)
+        filename = f"{title}_{timestamp}.md"
+        path = os.path.join(directory, filename)
 
-    with open(ruta, "w", encoding="utf-8") as f:
-        f.write(contenido)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
 
-    return ruta
+    return path
 
 
-def generar_nota(tema: str) -> None:
-    """Proceso completo: genera y guarda una nota."""
-    print(f"\n🧠 Generando nota sobre: {tema}")
-    print(f"   Modelo: {MODEL} | Vault: {VAULT_PATH}\n")
+def generate_note(topic: str) -> None:
+    """Full process: generates and saves a note."""
+    print(f"\n🧠 Generating note about: {topic}")
+    print(f"   Model: {MODEL} | Vault: {VAULT_PATH}\n")
 
-    prompt = f"""Crea una nota de Obsidian completa y útil sobre el siguiente tema:
+    prompt = f"""Create a complete and useful Obsidian note about the following topic:
 
-{tema}
+{topic}
 
-Recuerda: responde SOLO con el Markdown de la nota, empezando por el frontmatter YAML."""
+Remember: respond ONLY with the Markdown of the note, starting with the YAML frontmatter."""
 
-    print("⏳ Pensando...", end="", flush=True)
-    contenido = llamar_ollama(prompt)
-    print(" hecho.\n")
+    print("⏳ Thinking...", end="", flush=True)
+    content = call_ollama(prompt)
+    print(" done.\n")
 
-    if not contenido:
-        print("❌ La IA no devolvió contenido. Intenta de nuevo.")
+    if not content:
+        print("❌ The AI returned no content. Please try again.")
         return
 
-    ruta = guardar_nota(contenido)
-    print(f"✅ Nota guardada en: {ruta}")
-    print("\n─── Vista previa ─────────────────────────────────────────")
-    # Muestra las primeras 20 líneas
-    lineas = contenido.split("\n")
-    print("\n".join(lineas[:20]))
-    if len(lineas) > 20:
-        print(f"   ... ({len(lineas) - 20} líneas más)")
+    path = save_note(content)
+    print(f"✅ Note saved at: {path}")
+    print("\n─── Preview ──────────────────────────────────────────────")
+    # Show the first 20 lines
+    lines = content.split("\n")
+    print("\n".join(lines[:20]))
+    if len(lines) > 20:
+        print(f"   ... ({len(lines) - 20} more lines)")
     print("──────────────────────────────────────────────────────────\n")
 
 
-def modo_interactivo() -> None:
-    """Loop interactivo para generar múltiples notas."""
-    print("\n🧠 Brain Agent — Modo interactivo")
+def interactive_mode() -> None:
+    """Interactive loop to generate multiple notes."""
+    print("\n🧠 Brain Agent — Interactive mode")
     print(f"   Vault: {VAULT_PATH}")
-    print(f"   Modelo: {MODEL}")
-    print("   Escribe 'salir' para terminar.\n")
+    print(f"   Model: {MODEL}")
+    print("   Type 'exit' to quit.\n")
 
     while True:
         try:
-            tema = input("📝 Tema para la nota: ").strip()
+            topic = input("📝 Note topic: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n👋 Hasta luego.")
+            print("\n👋 Goodbye.")
             break
 
-        if tema.lower() in ("salir", "exit", "quit", "q"):
-            print("👋 Hasta luego.")
+        if topic.lower() in ("exit", "quit", "q"):
+            print("👋 Goodbye.")
             break
 
-        if not tema:
+        if not topic:
             continue
 
-        generar_nota(tema)
+        generate_note(topic)
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -238,44 +217,44 @@ def modo_interactivo() -> None:
 def main():
     global VAULT_PATH, MODEL
     parser = argparse.ArgumentParser(
-        description="Agente IA local para añadir notas al vault de Obsidian"
+        description="Local AI agent for adding notes to an Obsidian vault"
     )
     parser.add_argument(
-        "tema",
+        "topic",
         nargs="?",
-        help="Tema sobre el que generar la nota"
+        help="Topic to generate a note about"
     )
     parser.add_argument(
         "--interactive", "-i",
         action="store_true",
-        help="Modo interactivo (genera múltiples notas)"
+        help="Interactive mode (generate multiple notes)"
     )
     parser.add_argument(
         "--vault",
         default=VAULT_PATH,
-        help=f"Ruta al vault de Obsidian (default: {VAULT_PATH})"
+        help=f"Path to the Obsidian vault (default: {VAULT_PATH})"
     )
     parser.add_argument(
         "--model",
         default=MODEL,
-        help=f"Modelo de Ollama a usar (default: {MODEL})"
+        help=f"Ollama model to use (default: {MODEL})"
     )
 
     args = parser.parse_args()
 
-    # Permite sobreescribir config por argumento
+    # Allow overriding config via arguments
     VAULT_PATH = args.vault
     MODEL = args.model
 
     if not os.path.isdir(VAULT_PATH):
-        print(f"⚠️  Vault no encontrado en: {VAULT_PATH}")
-        print("   Usa --vault /ruta/a/tu/vault")
+        print(f"⚠️  Vault not found at: {VAULT_PATH}")
+        print("   Use --vault /path/to/your/vault")
         sys.exit(1)
 
-    if args.interactive or not args.tema:
-        modo_interactivo()
+    if args.interactive or not args.topic:
+        interactive_mode()
     else:
-        generar_nota(args.tema)
+        generate_note(args.topic)
 
 
 if __name__ == "__main__":
